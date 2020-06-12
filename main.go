@@ -46,12 +46,18 @@ const (
 var (
 	addr      = flag.String("addr", ":3000", "http service address")
 	homeTempl1 = template.Must(template.New("").Parse(htmlBody))
+	homeTempl2 = template.Must(template.New("").Parse(htmlBodyProcesos))
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
 	opc = 0
 	tiempo = 0.0
+	contprocesos = 0
+	contrunning = 0
+	contsleeping = 0
+	contstoped = 0
+	contzombies = 0
 )
 
 var graficaX1 []float64
@@ -214,6 +220,54 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 		// convert the buffer bytes to base64 string - use buf.Bytes() for new image
 		imgBase64Str := base64.StdEncoding.EncodeToString(buf)
 		contenido = contenido + imgBase64Str	
+		return []byte(contenido), lastMod, err
+	
+	case 3:
+		contenido:=""
+
+		files, err := ioutil.ReadDir("/proc")
+		if err != nil {
+			log.Fatal(err)
+		}
+		contenido = contenido + "Procesos en ejecucion: " + strconv.Itoa(contrunning) + "\n"
+		contenido = contenido + "Procesos suspendidos: " + strconv.Itoa(contsleeping) + "\n"
+		contenido = contenido + "Procesos detenidos: " + strconv.Itoa(contstoped) + "\n"
+		contenido = contenido + "Procesos zombie: " + strconv.Itoa(contzombies) + "\n"
+		contenido = contenido + "Procesos en ejecucion: " + strconv.Itoa(contprocesos) + "\n"
+		contenido = contenido + "%%"
+		contprocesos = 0
+		contrunning = 0
+		contsleeping = 0
+		contstoped = 0
+		contzombies = 0
+		for _, f := range files {
+			b, err := ioutil.ReadFile("/proc/"+f.Name()+"/status")
+			if err == nil {
+				contprocesos += 1
+				str := string(b)
+				listaInfo := strings.Split(string(str),"\n")
+				nombre := strings.Replace((listaInfo[0])[5:],"	","",-1)
+				//usuario := strings.Replace((listaInfo[1])[10:24]," ","",-1)
+				estado := strings.Replace((listaInfo[2])[6:],"	","",-1)
+				if estado == "S (sleeping)" {
+					contsleeping += 1
+				}else if estado == "R (running)" {
+					contrunning += 1
+				}else if estado == "I (idle)" {
+					contstoped += 1
+				}else {
+					contzombies += 1
+				}
+				//ram := strings.Replace((listaInfo[0])[10:24]," ","",-1)
+				contenido = contenido + f.Name() + ","		//PID
+				contenido = contenido + nombre + ","		//Nombre
+				contenido = contenido + ","		//Usuario
+				contenido = contenido + estado + ","		//Estado
+				contenido = contenido + "\n"			//% RAM
+				
+			}
+			
+		}
 		return []byte(contenido), lastMod, err
 	default:
 		var err error
@@ -411,49 +465,37 @@ func cpum(w http.ResponseWriter, r *http.Request) {
 	homeTempl1.Execute(w, &v)
 }
 
-func procesos(w http.ResponseWriter, r *http.Request){
-	procesostabla:=""
-
-	if r.Method == "POST"{
-		fmt.Println("Se elimino el proceso")
+func procesos(w http.ResponseWriter, r *http.Request) {
+	opc = 3
+	if r.URL.Path != "/procesos" {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
 	}
-
-	files, err := ioutil.ReadDir("/proc")
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, f := range files {
-		b, err := ioutil.ReadFile("/proc/"+f.Name()+"/status")
-		b, err1 := ioutil.ReadFile("/proc/"+f.Name()+"/loginuid")
-		if err == nil {
-			str := string(b)
-			listaInfo := strings.Split(string(str),"\n")
-			nombre := strings.Replace((listaInfo[0])[5:]," ","",-1)
-			//usuario := strings.Replace((listaInfo[1])[10:24]," ","",-1)
-			estado := strings.Replace((listaInfo[2])[6:]," ","",-1)
-			//ram := strings.Replace((listaInfo[0])[10:24]," ","",-1)
-			procesostabla = procesostabla + "<tr>"
-			procesostabla = procesostabla + "<td>" + f.Name() + "</td>"		//PID
-			procesostabla = procesostabla + "<td>" + nombre + "</td>"		//Nombre
-			procesostabla = procesostabla + "<td></td>"		//Usuario
-			procesostabla = procesostabla + "<td>" + estado + "</td>"		//Estado
-			procesostabla = procesostabla + "<td></td>"			//% RAM
-			procesostabla = procesostabla + `<td><form method="POST" action="/procesos">
-			<input type="submit" value="KILL" />
-			</form></td>`
-			procesostabla = procesostabla + "</tr>"
+	if r.Method == "POST" {
+		if err := r.ParseForm(); err != nil {
+            fmt.Fprintf(w, "ParseForm() err: %v", err)
+            return
 		}
-		
+		idproceso := r.FormValue("idproceso")
+		fmt.Println(idproceso);
 	}
-	file, err2 := os.Open("procesos.html")
-    if err2 != nil {
-        log.Fatal(err)
-    }
-    defer file.Close()
-    b, err := ioutil.ReadAll(file)
-	//fmt.Fprintf(w, BytesToString(b))
-	
-	w.Write([]byte(BytesToString(b)+procesostabla+"</body></html>"))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	p, lastMod, err := getData(3,time.Time{})
+	if err != nil {
+		p = []byte(err.Error())
+		lastMod = time.Unix(0, 0)
+	}
+	var v = struct {
+		Host    	string
+		Data    	string
+		LastMod 	string
+	}{
+		r.Host,
+		string(p),
+		strconv.FormatInt(lastMod.UnixNano(), 16),
+	}
+	homeTempl2.Execute(w, &v)
 }
 
 
@@ -476,8 +518,8 @@ const htmlBody = `<!DOCTYPE html>
 		<meta charset=”UTF-8”>
 		<title>SO1 P1 WEB</title>
 		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
 		<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
 		<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
     </head>
 	<body>
@@ -516,6 +558,95 @@ const htmlBody = `<!DOCTYPE html>
 					data.textContent = evt.data;
 					var b64 = evt.data.split("\n");
 					img11.src = "data:image/png;base64," + b64[3]; 
+                }
+            })();
+		</script>
+		
+    </body>
+</html>
+`
+
+const htmlBodyProcesos = `<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset=”UTF-8”>
+		<title>SO1 P1 WEB</title>
+		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+		<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+		<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    </head>
+	<body>
+		<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+			<a class="navbar-brand" href="#">P1 Processes Monitor</a>
+			<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+			<div class="collapse navbar-collapse" id="navbarSupportedContent">
+				<ul class="navbar-nav mr-auto">
+					<li class="nav-item active">
+						<a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" href="/cpumonitor">CPU Monitor</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" href="/rammonitor">RAM Monitor</a>
+					</li>
+				</ul>
+			</div>
+		</nav>
+		<pre id="fileData">{{.Data}}</pre>
+		<table id="tablaprocesos" class="table table-striped">
+		<thead class="thead-dark">
+			<tr>
+				<th scope="col">PID</th>
+				<th scope="col">Nombre</th>
+				<th scope="col">Usuario</th>
+				<th scope="col">Estado</th>
+				<th scope="col">% RAM</th>
+				<th scope="col"></th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr class="table-secondary">
+			</tr>
+		</tbody>
+		</table>
+        <script type="text/javascript">
+            (function() {
+				var data2 = document.getElementById("fileData");
+				var table = document.getElementById("tablaprocesos");
+				while(table.hasChildNodes())
+				{
+				table.removeChild(table.firstChild);
+				}
+                var conn = new WebSocket("ws://{{.Host}}/ws?lastMod={{.LastMod}}");
+                conn.onclose = function(evt) {
+					data2.textContent = 'Connection closed';
+                }
+                conn.onmessage = function(evt) {
+                    console.log('file updated');
+					//data.textContent = evt.data;
+					var contenido = evt.data.split("%%");
+					data2.textContent = contenido[0];
+					var lineas = contenido[1].split("\n");
+					for(var i=0;i<lineas.length-1;i++){
+						var row = table.insertRow(-1);
+						var dato = lineas[i].split(",");
+						var cell1 = row.insertCell(0);
+						var cell2 = row.insertCell(1);
+						var cell3 = row.insertCell(2);
+						var cell4 = row.insertCell(3);
+						var cell5 = row.insertCell(4);
+						var cell6 = row.insertCell(5);
+						cell1.innerHTML = dato[0];
+						cell2.innerHTML = dato[1]; 
+						cell3.innerHTML = dato[2];
+						cell4.innerHTML = dato[3]; 
+						cell5.innerHTML = dato[4];
+						cell6.innerHTML = '<form method="POST" action="/procesos"><input name="idproceso" type="hidden" id="idproceso" value="'+dato[0]+'"/><input type="submit" value="KILL"/></form>'
+					}
                 }
             })();
 		</script>
