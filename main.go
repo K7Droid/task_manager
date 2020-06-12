@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"time"
 	"github.com/gorilla/websocket"
@@ -477,7 +478,14 @@ func procesos(w http.ResponseWriter, r *http.Request) {
             return
 		}
 		idproceso := r.FormValue("idproceso")
-		fmt.Println(idproceso);
+		if idproceso !="" {
+			corrercomando := exec.Command("kill","-15",idproceso).Run()
+			if corrercomando != nil{
+			fmt.Fprintf(w, "Error al eliminar proceso!")
+			return
+			}
+			fmt.Println("Se elimino el proceso: "+ idproceso);
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
