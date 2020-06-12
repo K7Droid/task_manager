@@ -241,6 +241,18 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 		contsleeping = 0
 		contstoped = 0
 		contzombies = 0
+		contenido= contenido + `<table id="tablaprocesos" class="table table-striped">
+		<thead class="thead-dark">
+			<tr>
+				<th scope="col">PID</th>
+				<th scope="col">Nombre</th>
+				<th scope="col">Usuario</th>
+				<th scope="col">Estado</th>
+				<th scope="col">% RAM</th>
+				<th scope="col"></th>
+			</tr>
+		</thead>
+		<tbody>`
 		for _, f := range files {
 			b, err := ioutil.ReadFile("/proc/"+f.Name()+"/status")
 			if err == nil {
@@ -260,15 +272,27 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 					contzombies += 1
 				}
 				//ram := strings.Replace((listaInfo[0])[10:24]," ","",-1)
-				contenido = contenido + f.Name() + ","		//PID
-				contenido = contenido + nombre + ","		//Nombre
-				contenido = contenido + ","		//Usuario
-				contenido = contenido + estado + ","		//Estado
-				contenido = contenido + "\n"			//% RAM
+				contenido= contenido+ `<tr>`
+				contenido= contenido+ "<td>" + f.Name() + "</td>"		//PID
+				contenido= contenido+ "<td>" + nombre + "</td>"		//Nombre
+				contenido= contenido+ "<td></td>"		//Usuario
+				contenido= contenido+ "<td>" + estado + "</td>"		//Estado
+				contenido= contenido+ "<td></td>"			//% RAM
+				contenido= contenido+ 
+				`<td>
+				<form method="POST" action="/procesos"> 
+				<input name="idproceso" type="hidden" id="idproceso" value="`+f.Name()+`"/>
+				<input type="submit" value="KILL"/>
+				</form>
+				</td>`
+
+				contenido= contenido+ "</tr>"
 				
 			}
 			
+			
 		}
+		contenido= contenido+ "</tbody></table>"
 		return []byte(contenido), lastMod, err
 	default:
 		var err error
@@ -605,30 +629,12 @@ const htmlBodyProcesos = `<!DOCTYPE html>
 			</div>
 		</nav>
 		<pre id="fileData">{{.Data}}</pre>
-		<table id="tablaprocesos" class="table table-striped">
-		<thead class="thead-dark">
-			<tr>
-				<th scope="col">PID</th>
-				<th scope="col">Nombre</th>
-				<th scope="col">Usuario</th>
-				<th scope="col">Estado</th>
-				<th scope="col">% RAM</th>
-				<th scope="col"></th>
-			</tr>
-		</thead>
-		<tbody>
-			<tr class="table-secondary">
-			</tr>
-		</tbody>
-		</table>
+		<div id="espaciotabla"></div>
         <script type="text/javascript">
             (function() {
 				var data2 = document.getElementById("fileData");
-				var table = document.getElementById("tablaprocesos");
-				while(table.hasChildNodes())
-				{
-				table.removeChild(table.firstChild);
-				}
+				var table = document.getElementById("espaciotabla");
+				
                 var conn = new WebSocket("ws://{{.Host}}/ws?lastMod={{.LastMod}}");
                 conn.onclose = function(evt) {
 					data2.textContent = 'Connection closed';
@@ -638,23 +644,9 @@ const htmlBodyProcesos = `<!DOCTYPE html>
 					//data.textContent = evt.data;
 					var contenido = evt.data.split("%%");
 					data2.textContent = contenido[0];
-					var lineas = contenido[1].split("\n");
-					for(var i=0;i<lineas.length-1;i++){
-						var row = table.insertRow(-1);
-						var dato = lineas[i].split(",");
-						var cell1 = row.insertCell(0);
-						var cell2 = row.insertCell(1);
-						var cell3 = row.insertCell(2);
-						var cell4 = row.insertCell(3);
-						var cell5 = row.insertCell(4);
-						var cell6 = row.insertCell(5);
-						cell1.innerHTML = dato[0];
-						cell2.innerHTML = dato[1]; 
-						cell3.innerHTML = dato[2];
-						cell4.innerHTML = dato[3]; 
-						cell5.innerHTML = dato[4];
-						cell6.innerHTML = '<form method="POST" action="/procesos"><input name="idproceso" type="hidden" id="idproceso" value="'+dato[0]+'"/><input type="submit" value="KILL"/></form>'
-					}
+					var lineas = contenido[1];
+					table.innerHTML=contenido[1];
+					
                 }
             })();
 		</script>
