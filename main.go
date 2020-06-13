@@ -1,6 +1,3 @@
-// Copyright 2013 The Gorilla WebSocket Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
 
 package main
 
@@ -31,16 +28,9 @@ import (
 )
 
 const (
-	// Time allowed to write the file to the client.
 	writeWait = 2 * time.Second
-
-	// Time allowed to read the next pong message from the client.
 	pongWait = 14 * time.Second
-
-	// Send pings to client with this period. Must be less than pongWait.
 	pingPeriod = (pongWait * 9) / 10
-
-	// Poll file for changes with this period.
 	filePeriod = 2 * time.Second
 )
 
@@ -53,7 +43,8 @@ var (
 		WriteBufferSize: 1024,
 	}
 	opc = 0
-	tiempo = 0.0
+	tiempo1 = 0.0
+	tiempo2 = 0.0
 	contprocesos = 0
 	contrunning = 0
 	contsleeping = 0
@@ -76,9 +67,10 @@ func dealwithErr(err error) {
 }
 
 func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
-	tiempo +=  1.0
+	
 	switch i {
 	case 1:
+		tiempo1 +=  1.0
 		contenido := ""
 		b, err := ioutil.ReadFile("/proc/meminfo")
 
@@ -94,14 +86,14 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 		if err1 == nil && err2 == nil{
 			ramTotal1 := ramTotal / 1024
 			ramLibre1 := ramLibre / 1024
-			fmt.Println(strconv.Itoa(ramTotal1)+" - "+strconv.Itoa(ramLibre1))
+			//fmt.Println(strconv.Itoa(ramTotal1)+" - "+strconv.Itoa(ramLibre1))
 			contenido = "Memoria Total: " + strconv.Itoa(ramTotal1) + " MB\n"
 			contenido = contenido + "Memoria Libre: " + strconv.Itoa(ramLibre1) + " MB\n"
 			porcentaje1 := float64(ramLibre1) / float64(ramTotal1) * 100
 			contenido = contenido + "Porcentaje de memoria utilizado: " + fmt.Sprintf("%f", porcentaje1) + "%\n"
 		
 			graficaY1 = append(graficaY1,porcentaje1)
-			graficaX1 = append(graficaX1,tiempo)
+			graficaX1 = append(graficaX1,tiempo1)
 
 			mainSeries := chart.ContinuousSeries{
 				Name:    "A test series",
@@ -134,28 +126,22 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 		
 			defer imgFile.Close()
 		
-			// create a new buffer base on file size
 			fInfo, _ := imgFile.Stat()
 			var size int64 = fInfo.Size()
 			buf := make([]byte, size)
 		
-			// read file content into buffer
 			fReader := bufio.NewReader(imgFile)
 			fReader.Read(buf)
 		
-			// if you create a new image instead of loading from file, encode the image to buffer instead with png.Encode()
-		
-			// png.Encode(&buf, image)
-		
-			// convert the buffer bytes to base64 string - use buf.Bytes() for new image
 			imgBase64Str := base64.StdEncoding.EncodeToString(buf)
 			contenido = contenido + imgBase64Str
 			return []byte(contenido), lastMod, err
 		}else{
-			return []byte("Ocurrio un error"), lastMod, err
+			return []byte("Ocurrió\nun\nerror\n"), lastMod, err
 		}
 
 	case 2:
+		tiempo2 +=  1.0
 		var err error
 		err = nil
 		idle0, total0 := getCPUSample()
@@ -172,10 +158,10 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 		contenido = contenido + "Porcentaje del CPU utilizado: " + fmt.Sprintf("%f",cpuUsage) + "%\n"
 
 		graficaY2 = append(graficaY2,cpuUsage)
-		graficaX2 = append(graficaX2,tiempo)
+		graficaX2 = append(graficaX2,tiempo2)
 
 		mainSeries := chart.ContinuousSeries{
-			Name:    "A test series",
+			Name:    "A test series 2",
 			XValues: graficaX2,
 			YValues: graficaY2,
 		}
@@ -192,11 +178,11 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 			},
 		}
 	
-		f, _ := os.Create("graficaresultante.png")
+		f, _ := os.Create("graficaresultante2.png")
 		defer f.Close()
 		graph.Render(chart.PNG, f)
 	
-		imgFile, err := os.Open("graficaresultante.png") // a QR code image
+		imgFile, err := os.Open("graficaresultante2.png") // a QR code image
 	
 		if err != nil {
 			fmt.Println(err)
@@ -204,21 +190,14 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 		}
 	
 		defer imgFile.Close()
-	
-		// create a new buffer base on file size
+
 		fInfo, _ := imgFile.Stat()
 		var size int64 = fInfo.Size()
 		buf := make([]byte, size)
 	
-		// read file content into buffer
 		fReader := bufio.NewReader(imgFile)
 		fReader.Read(buf)
 	
-		// if you create a new image instead of loading from file, encode the image to buffer instead with png.Encode()
-	
-		// png.Encode(&buf, image)
-	
-		// convert the buffer bytes to base64 string - use buf.Bytes() for new image
 		imgBase64Str := base64.StdEncoding.EncodeToString(buf)
 		contenido = contenido + imgBase64Str	
 		return []byte(contenido), lastMod, err
@@ -260,7 +239,14 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 				str := string(b)
 				listaInfo := strings.Split(string(str),"\n")
 				nombre := strings.Replace((listaInfo[0])[5:],"	","",-1)
-				//usuario := strings.Replace((listaInfo[1])[10:24]," ","",-1)
+				usuario1 := strings.Replace((listaInfo[8])[4:9],"	","",-1)
+				usuario2,err1 := exec.Command("getent" ,"passwd", usuario1).Output()
+				usuario3 := strings.Split(string(usuario2),":")
+				usuario :=usuario3[0]
+				//fmt.Println("-> "+usuario)
+				if err1 != nil {
+					//Entrá aqui cuando no encuentra el username de acuerdo al UID
+				}
 				estado := strings.Replace((listaInfo[2])[6:],"	","",-1)
 				if estado == "S (sleeping)" {
 					contsleeping += 1
@@ -275,7 +261,7 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 				contenido= contenido+ `<tr>`
 				contenido= contenido+ "<td>" + f.Name() + "</td>"		//PID
 				contenido= contenido+ "<td>" + nombre + "</td>"		//Nombre
-				contenido= contenido+ "<td></td>"		//Usuario
+				contenido= contenido+ "<td>" + usuario + "</td>"		//Usuario
 				contenido= contenido+ "<td>" + estado + "</td>"		//Estado
 				contenido= contenido+ "<td></td>"			//% RAM
 				contenido= contenido+ 
@@ -297,7 +283,7 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 	default:
 		var err error
 		err = nil
-		contenido := "Ocurrió un error"
+		contenido := "Ocurrió\nun\nerror\n"
 		return []byte(contenido), lastMod, err
 
 	}
@@ -319,8 +305,8 @@ func getCPUSample() (idle, total uint64) {
                 if err != nil {
                     fmt.Println("Error: ", i, fields[i], err)
                 }
-                total += val // tally up all the numbers to get total ticks
-                if i == 4 {  // idle is the 5th field in the cpu line
+                total += val
+                if i == 4 {
                     idle = val
                 }
             }
@@ -566,6 +552,9 @@ const htmlBody = `<!DOCTYPE html>
 						<a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
 					</li>
 					<li class="nav-item">
+						<a class="nav-link" href="/procesos">Processes</a>
+					</li>
+					<li class="nav-item">
 						<a class="nav-link" href="/cpumonitor">CPU Monitor</a>
 					</li>
 					<li class="nav-item">
@@ -574,7 +563,7 @@ const htmlBody = `<!DOCTYPE html>
 				</ul>
 			</div>
 		</nav>
-		<pre id="fileData">{{.Data}}</pre>
+		<pre id="fileData"></pre>
 		<img id="img1">
         <script type="text/javascript">
             (function() {
@@ -586,10 +575,10 @@ const htmlBody = `<!DOCTYPE html>
                     data.textContent = 'Connection closed';
                 }
                 conn.onmessage = function(evt) {
-                    console.log('file updated');
-					data.textContent = evt.data;
-					var b64 = evt.data.split("\n");
-					img11.src = "data:image/png;base64," + b64[3]; 
+					console.log('file updated');
+					var contenido = evt.data.split("\n");
+					data.textContent = contenido[0] + "\n" + contenido[1]+ "\n"+ contenido[2]+ "\n";
+					img11.src = "data:image/png;base64," + contenido[3]; 
                 }
             })();
 		</script>
@@ -620,6 +609,9 @@ const htmlBodyProcesos = `<!DOCTYPE html>
 						<a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
 					</li>
 					<li class="nav-item">
+						<a class="nav-link" href="/procesos">Processes</a>
+					</li>
+					<li class="nav-item">
 						<a class="nav-link" href="/cpumonitor">CPU Monitor</a>
 					</li>
 					<li class="nav-item">
@@ -628,7 +620,7 @@ const htmlBodyProcesos = `<!DOCTYPE html>
 				</ul>
 			</div>
 		</nav>
-		<pre id="fileData">{{.Data}}</pre>
+		<pre id="fileData"></pre>
 		<div id="espaciotabla"></div>
         <script type="text/javascript">
             (function() {
