@@ -59,6 +59,16 @@ var graficaX2 []float64
 var graficaY2 []float64
 
 
+type procStruct struct{
+	pid 	string
+	nombre 	string
+	usuario string
+	estado 	string
+	percram string
+	hijos 	[]procStruct
+}
+
+
 func dealwithErr(err error) {
 	if err != nil {
 			fmt.Println(err)
@@ -204,7 +214,7 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 	
 	case 3:
 		contenido:=""
-
+		var procesosSt []procStruct
 		files, err := ioutil.ReadDir("/proc")
 		if err != nil {
 			log.Fatal(err)
@@ -229,6 +239,7 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 				<th scope="col">Estado</th>
 				<th scope="col">% RAM</th>
 				<th scope="col"></th>
+				<th scope="col">Hijos</th>
 			</tr>
 		</thead>
 		<tbody>`
@@ -243,7 +254,6 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 				usuario2,err1 := exec.Command("getent" ,"passwd", usuario1).Output()
 				usuario3 := strings.Split(string(usuario2),":")
 				usuario :=usuario3[0]
-				//fmt.Println("-> "+usuario)
 				if err1 != nil {
 					//Entrá aqui cuando no encuentra el username de acuerdo al UID
 				}
@@ -257,26 +267,75 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 				}else {
 					contzombies += 1
 				}
-				//ram := strings.Replace((listaInfo[0])[10:24]," ","",-1)
-				contenido= contenido+ `<tr>`
-				contenido= contenido+ "<td>" + f.Name() + "</td>"		//PID
-				contenido= contenido+ "<td>" + nombre + "</td>"		//Nombre
-				contenido= contenido+ "<td>" + usuario + "</td>"		//Usuario
-				contenido= contenido+ "<td>" + estado + "</td>"		//Estado
-				contenido= contenido+ "<td></td>"			//% RAM
-				contenido= contenido+ 
-				`<td>
-				<form method="POST" action="/procesos"> 
-				<input name="idproceso" type="hidden" id="idproceso" value="`+f.Name()+`"/>
-				<input type="submit" value="KILL"/>
-				</form>
-				</td>`
 
-				contenido= contenido+ "</tr>"
+				var nuevoproc = procStruct{f.Name(),nombre,usuario,estado,"",[]procStruct{}}
+				procesosSt = append(procesosSt,nuevoproc);			
+			}
+			
+		}
+		for _, f := range files {
+			b, err := ioutil.ReadFile("/proc/"+f.Name()+"/status")
+			if err == nil {
+				str := string(b)
+				listaInfo := strings.Split(string(str),"\n")
+				nombre := strings.Replace((listaInfo[0])[5:],"	","",-1)
+				usuario1 := strings.Replace((listaInfo[8])[4:9],"	","",-1)
+				padre := strings.Replace((listaInfo[6])[5:],"	","",-1)
+				usuario2,err1 := exec.Command("getent" ,"passwd", usuario1).Output()
+				usuario3 := strings.Split(string(usuario2),":")
+				usuario :=usuario3[0]
+				if err1 != nil {
+					//Entrá aqui cuando no encuentra el username de acuerdo al UID
+				}
+				estado := strings.Replace((listaInfo[2])[6:],"	","",-1)
+				
+
+				var nuevoproc = procStruct{f.Name(),nombre,usuario,estado,"",[]procStruct{}}
+				for i:=0; i < len(procesosSt); i++ {
+					if padre == procesosSt[i].pid && padre != "0" {
+						procesosSt[i].hijos = append(procesosSt[i].hijos,nuevoproc)
+					}
+				}
+				
 				
 			}
 			
-			
+		}
+		for j:=0;j<len(procesosSt);j++ {
+			//ram := strings.Replace((listaInfo[0])[10:24]," ","",-1)
+			contenido= contenido+ `<tr>`
+			contenido= contenido+ "<td>" + procesosSt[j].pid + "</td>"		//PID
+			contenido= contenido+ "<td>" + procesosSt[j].nombre + "</td>"		//Nombre
+			contenido= contenido+ "<td>" + procesosSt[j].usuario + "</td>"		//Usuario
+			contenido= contenido+ "<td>" + procesosSt[j].estado + "</td>"		//Estado
+			contenido= contenido+ "<td>" + procesosSt[j].percram + "</td>"			//% RAM
+			contenido= contenido+ 
+			`<td>
+			<form method="POST" action="/procesos"> 
+			<input name="idproceso" type="hidden" id="idproceso" value="`+ procesosSt[j].pid +`"/>
+			<input type="submit" value="KILL"/>
+			</form>
+			</td>`
+			contenido = contenido+ "<td>"
+			if len(procesosSt[j].hijos) > 0{
+				contenido= contenido + `<table id="tablahijos" class="table table-striped">
+				<thead class="thead-dark">
+					<tr>
+						<th scope="col">PID</th>
+						<th scope="col">Nombre</th>
+					</tr>
+				</thead>
+				<tbody>`
+				for k:=0;k<len(procesosSt[j].hijos);k++ {
+					contenido= contenido+ `<tr>`
+					contenido= contenido+ "<td>" + procesosSt[j].hijos[k].pid + "</td>"		//PID
+					contenido= contenido+ "<td>" + procesosSt[j].hijos[k].nombre + "</td>"		//Nombre
+					contenido= contenido+ `<tr>`
+				}
+				contenido= contenido+ "</tbody></table>"
+			}
+			contenido = contenido+ "</td>"
+			contenido = contenido+ "</tr>"
 		}
 		contenido= contenido+ "</tbody></table>"
 		return []byte(contenido), lastMod, err
