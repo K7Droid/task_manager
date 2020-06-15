@@ -262,8 +262,16 @@ func getData(i int, lastMod time.Time) ([]byte, time.Time, error) {
 					contsleeping += 1
 				}else if estado == "R (running)" {
 					contrunning += 1
-				}else if estado == "I (idle)" {
+				}else if estado == "T (stopped)" {
 					contstoped += 1
+				}else if estado == "D (disk sleep)" {
+					
+				}else if estado == "t (tracing stop)" {
+					
+				}else if estado == "X (dead)" {
+					
+				}else if estado == "I (idle)" {
+					
 				}else {
 					contzombies += 1
 				}
