@@ -1,4 +1,5 @@
-# task_manager
+# Task Manager
+
 Administrador de tareas desarrollado en lenguaje Go.
 
 Comando para correrlo:
